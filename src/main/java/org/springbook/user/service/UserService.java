@@ -58,31 +58,17 @@ public class UserService {
     }
 
     public void upgradeLevels() throws Exception {
-
-        /* 스프링이 제공하는 트랜잭션 추상화 방법 */
-        // JDBC 트랜잭션 추상 오브젝트 생성. 사용한 DB의 DataSource를 주입받음
-//        PlatformTransactionManager transactionManager = new DataSourceTransactionManager( dataSource ); // DataSourceTransactionManager: JDBC의 로컬 트랜잭션을 이용한 구현체
-//        PlatformTransactionManager transactionManager = new JtaTransactionManager(); // JtaTransactionManager: JTA를 이용한 글로벌 트랜잭션을 이용한 구현체
-
-        // DI로 받은 PlatformTransactionManager로 트랜잭션 시작 (멀티 스레드에도 OK)
         TransactionStatus status = this.transactionManager.getTransaction( new DefaultTransactionDefinition() );
 
         try {
 
-            List< User > users = userDao.getAll();
+            // 실제 비즈니스 로직 ------------------>
+            upgradeLevelInternal();
+            // <-----------------------------------
 
-            for ( User user : users ) {
-                // 추상화. 레벨 업그레이드 가능한지 확인 후 -> 가능하면 레벨 업그레이드
-                if ( userLevelUpgradePolicy.canUpgradeLevel( user ) ) {
-                    upgradeLevel( user );
-                }
-            }
-
-            // 트랜잭션 커밋
             this.transactionManager.commit( status );
         }
         catch ( Exception e ) {
-            // 트랜잭션 롤백
             this.transactionManager.rollback( status );
             throw e;
         }
@@ -97,6 +83,19 @@ public class UserService {
 
         // 업그레이드 후 메일 발송
         sendUpgradeEmail( user );
+    }
+
+    /**
+     * 사용자 레벨 업그레이드 로직 분리
+     */
+    private void upgradeLevelInternal() {
+        List< User > users = userDao.getAll();
+
+        for ( User user : users ) {
+            if ( userLevelUpgradePolicy.canUpgradeLevel( user ) ) {
+                upgradeLevel( user );
+            }
+        }
     }
 
     private void sendUpgradeEmail( User user ) {
