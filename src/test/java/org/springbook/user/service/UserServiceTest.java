@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springbook.user.dao.UserDao;
 import org.springbook.user.domain.Level;
 import org.springbook.user.domain.User;
-import org.springbook.user.service.UserService.TestUserService;
+import org.springbook.user.service.UserServiceImpl.TestUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.MailException;
 import org.springframework.mail.MailSender;
@@ -21,8 +21,8 @@ import java.util.List;
 
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.*;
-import static org.springbook.user.service.UserService.MIN_LOGCOUNT_FOR_SILVER;
-import static org.springbook.user.service.UserService.MIN_RECCOMEND_FOR_GOLD;
+import static org.springbook.user.service.UserServiceImpl.MIN_LOGCOUNT_FOR_SILVER;
+import static org.springbook.user.service.UserServiceImpl.MIN_RECCOMEND_FOR_GOLD;
 
 
 @SpringJUnitConfig(locations = "/test-applicationContext.xml") // JUnit4의 RunWith(SpringJUnit4ClassRunner.class) + ContextConfiguration(locations = "/applicationContext.xml")
@@ -30,6 +30,7 @@ class UserServiceTest {
 
     @Autowired UserDao userDao;
     @Autowired UserService userService;
+    @Autowired UserServiceImpl userServiceImpl;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired UserLevelUpgradePolicy userLevelUpgradePolicy;
     @Autowired MailSender mailSender;
@@ -55,12 +56,16 @@ class UserServiceTest {
     public void upgradeAllOrNothing(){
 
         // TestUserService는 이 테스트에서만 쓸 것이기 때문에 굳이 빈으로 등록하지 않는다.
-        UserService testUserService = new TestUserService( users.get( 3 ).getId() );
+        TestUserService testUserService = new TestUserService( users.get( 3 ).getId() );
         // 수동DI
         testUserService.setUserDao( this.userDao );
-        testUserService.setUserLevelUpgradePolicy( this.userLevelUpgradePolicy );
-        testUserService.setTransactionManager( this.transactionManager );
         testUserService.setMailSender( this.mailSender );
+        testUserService.setUserLevelUpgradePolicy( this.userLevelUpgradePolicy );
+
+        // 트랜잭션 기능을 분리한 UserServiceTx를 생성하고 설정정보와 의존 오브젝트 주입
+        UserServiceTx userServiceTx = new UserServiceTx();
+        userServiceTx.setTransactionManager( this.transactionManager );
+        userServiceTx.setUserService( testUserService );
 
         userDao.deleteAll();
         for ( User user : users ) {
@@ -68,13 +73,11 @@ class UserServiceTest {
         }
 
         try {
-            // users 레벨 업그레이드
-            testUserService.upgradeLevels();
-            //  testUserService.upgradeLevels()가 정상 종료한다면 테스트 실패
+            userServiceTx.upgradeLevels(); // 트랜잭션 기능이 있는 UserServiceTx를 통해 testUserService가 호출되어야 함
             fail("TestUserServiceException expected");
         }
         // TestUserService가 주는 예외는 잡아서 계속 진행함.
-        catch ( UserService.TestUserServiceException e ) {
+        catch ( UserServiceImpl.TestUserServiceException e ) {
         }
         catch ( Exception e ) {
             throw new RuntimeException( e );
@@ -114,7 +117,7 @@ class UserServiceTest {
 
         // 메일 발송 여부 확인을 위해 테스트용 MockMailSender를 DI로 받아서 사용
         MockMailSender mockMailSender = new MockMailSender();
-        userService.setMailSender( mockMailSender );
+        userServiceImpl.setMailSender( mockMailSender );
 
         userService.upgradeLevels();
 

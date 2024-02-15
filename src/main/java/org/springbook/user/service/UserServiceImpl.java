@@ -23,6 +23,10 @@ public class UserServiceImpl implements UserService {
 
     private MailSender mailSender;
 
+    public void setUserLevelUpgradePolicy( UserLevelUpgradePolicy userLevelUpgradePolicy ) {
+        this.userLevelUpgradePolicy = userLevelUpgradePolicy;
+    }
+
     public void setMailSender( MailSender mailSender ) {
         this.mailSender = mailSender;
     }
