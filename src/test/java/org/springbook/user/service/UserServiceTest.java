@@ -109,25 +109,25 @@ class UserServiceTest {
     @Test
     @DirtiesContext // 컨텍스트의 DI 설정을 변경하는 테스트라는 것을 알려줌
     public void upgradeLevels() throws Exception {
-        /* DB 테스트 데이터 준비 */
-        userDao.deleteAll();
-        for ( User user : users ) {
-            userDao.add( user );
-        }
+        // 고립된 테스트에서는 테스트 대상 오브젝트를 직접 생성하면 됨
+        UserServiceImpl userServiceImpl = new UserServiceImpl();
+        userServiceImpl.setUserLevelUpgradePolicy( new UserLevelUpgradePolicyImpl() );
 
-        /* [Mock] 메일 발송 여부 확인을 위해 목 오브젝트 DI */
+        // 목 오브젝트로 만든 UserDao를 직접 DI
+        MockUserDao mockUserDao = new MockUserDao( this.users );
+        userServiceImpl.setUserDao( mockUserDao );
+
         MockMailSender mockMailSender = new MockMailSender();
         userServiceImpl.setMailSender( mockMailSender );
 
-        // 테스트 대상 실행
-        userService.upgradeLevels();
+        userServiceImpl.upgradeLevels();
 
-        /* DB에 저장된 결과 확인*/
-        checkLevelUpgraded( users.get( 0 ), false );
-        checkLevelUpgraded( users.get( 1 ), true );
-        checkLevelUpgraded( users.get( 2 ), false );
-        checkLevelUpgraded( users.get( 3 ), true );
-        checkLevelUpgraded( users.get( 4 ), false );
+        // MockUserDao로부터 업데이트 결과 가져옴
+        List< User > updated = mockUserDao.getUpdated();
+        // 업데이트 횟수와 정보 확인
+        assertThat( updated.size(), is( 2 ) );
+        checkUserAndLevel( updated.get( 0 ), "leegw700", Level.SILVER );
+        checkUserAndLevel( updated.get( 1 ), "leemj", Level.GOLD );
 
         /* [Mock] 목 오브젝트를 이용한 결과 확인 */
         List< String > requests = mockMailSender.getRequests();
@@ -135,6 +135,17 @@ class UserServiceTest {
         assertThat( requests.get( 0 ), is( users.get( 1 ).getEmail() ) );
         assertThat( requests.get( 1 ), is( users.get( 3 ).getEmail() ) );
 
+    }
+
+    /**
+     * id와 level을 확인하는 간단한 헬퍼 메소드
+     * @param user
+     * @param expectedId
+     * @param level
+     */
+    private void checkUserAndLevel( User updated, String expectedId, Level expectedLevel ) {
+        assertThat( updated.getId(), is( expectedId ) );
+        assertThat( updated.getLevel(), is( expectedLevel ) );
     }
 
     private void checkLevelUpgraded( User user, boolean upgraded ) {
@@ -210,6 +221,7 @@ class UserServiceTest {
         }
 
     }
+
 
     /**
      * 메일 전송 확인용 클래스
