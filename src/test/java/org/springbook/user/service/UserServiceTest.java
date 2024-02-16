@@ -109,24 +109,27 @@ class UserServiceTest {
     @Test
     @DirtiesContext // 컨텍스트의 DI 설정을 변경하는 테스트라는 것을 알려줌
     public void upgradeLevels() throws Exception {
+        /* DB 테스트 데이터 준비 */
         userDao.deleteAll();
-
         for ( User user : users ) {
             userDao.add( user );
         }
 
-        // 메일 발송 여부 확인을 위해 테스트용 MockMailSender를 DI로 받아서 사용
+        /* [Mock] 메일 발송 여부 확인을 위해 목 오브젝트 DI */
         MockMailSender mockMailSender = new MockMailSender();
         userServiceImpl.setMailSender( mockMailSender );
 
+        // 테스트 대상 실행
         userService.upgradeLevels();
 
+        /* DB에 저장된 결과 확인*/
         checkLevelUpgraded( users.get( 0 ), false );
         checkLevelUpgraded( users.get( 1 ), true );
         checkLevelUpgraded( users.get( 2 ), false );
         checkLevelUpgraded( users.get( 3 ), true );
         checkLevelUpgraded( users.get( 4 ), false );
 
+        /* [Mock] 목 오브젝트를 이용한 결과 확인 */
         List< String > requests = mockMailSender.getRequests();
         MatcherAssert.assertThat( requests.size(), is( 2 ) );
         assertThat( requests.get( 0 ), is( users.get( 1 ).getEmail() ) );
