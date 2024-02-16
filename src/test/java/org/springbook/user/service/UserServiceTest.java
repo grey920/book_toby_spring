@@ -153,6 +153,65 @@ class UserServiceTest {
     }
 
     /**
+     * UserServiceImpl의 upgradeLevels() 메소드에서 사용하는 userDao의 기능은 getAll()과 update()이다.
+     * - getAll()은 레벨 업그레이드 후보 목록만 제공하면 된다. 스텁으로 동작하면 됨
+     * - update()는 업그레이드로 레벨이 '변경'됨을 확인해야 하므로 Mock Object로서 동작해야 함
+     */
+    static class MockUserDao implements UserDao {
+        private List<User> users; // 레벨 업그레이드 후보 User 오브젝트 목록. getAll()의 리턴
+        private List<User> updated = new ArrayList<>(); // 업그레이드 대상 오브젝트를 저장해둘 목록
+
+        private MockUserDao( List<User> users ){
+            this.users = users;
+        }
+
+        public List<User> getUpdated(){
+            return this.updated;
+        }
+
+        /**
+         * 스텁 기능 제공
+         * @return
+         */
+        @Override
+        public List< User > getAll() {
+            return this.users;
+        }
+
+        /**
+         * 목 오브젝트 기능 제공
+         * @param user1
+         */
+        @Override
+        public void update( User user ) {
+            updated.add( user );
+        }
+
+        // ----------------> 테스트에 사용되지 않는 메소드
+        @Override
+        public void add( User user ) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public User get( String id ) {
+            throw new UnsupportedOperationException();
+        }
+
+
+        @Override
+        public void deleteAll() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public int getCount() {
+            throw new UnsupportedOperationException();
+        }
+
+    }
+
+    /**
      * 메일 전송 확인용 클래스
      * 전송 요청을 받은 메일 주소를 저장해주고 이를 읽을 수 있게 한다.
      */
