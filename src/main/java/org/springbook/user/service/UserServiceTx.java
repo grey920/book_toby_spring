@@ -10,6 +10,7 @@ import org.springframework.transaction.support.DefaultTransactionDefinition;
  * 비즈니스 로직은 다른 구현 클래스에 위임한다.
  */
 public class UserServiceTx implements UserService{
+    // 타깃 오브젝트
     UserService userService;
     PlatformTransactionManager transactionManager;
 
@@ -25,6 +26,7 @@ public class UserServiceTx implements UserService{
         this.userService = userService;
     }
 
+    /* 메소드 구현과 위임 */
     @Override
     public void add( User user ) {
         userService.add( user );
@@ -32,17 +34,20 @@ public class UserServiceTx implements UserService{
 
     @Override
     public void upgradeLevels() {
+        // 부가기능
         TransactionStatus status = this.transactionManager.getTransaction( new DefaultTransactionDefinition() );
 
         try{
 
+            // 위임
             userService.upgradeLevels();
 
+            // 부가기능 ---------------->
             this.transactionManager.commit( status );
         }
         catch ( RuntimeException e ) {
             this.transactionManager.rollback( status );
             throw e;
-        }
+        } // <-------------------------
     }
 }
