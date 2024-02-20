@@ -3,6 +3,8 @@ package org.springbook.user.service;
 import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.springbook.user.dao.UserDao;
 import org.springbook.user.domain.Level;
 import org.springbook.user.domain.User;
@@ -21,6 +23,7 @@ import java.util.List;
 
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 import static org.springbook.user.service.UserServiceImpl.MIN_LOGCOUNT_FOR_SILVER;
 import static org.springbook.user.service.UserServiceImpl.MIN_RECCOMEND_FOR_GOLD;
 
@@ -107,31 +110,78 @@ class UserServiceTest {
     }
 
     @Test
+    public void mockUpgradeLevels() throws Exception {
+        // given ---------------------------->
+        UserServiceImpl userServiceImpl = new UserServiceImpl();
+        userServiceImpl.setUserLevelUpgradePolicy( new UserLevelUpgradePolicyImpl() );
+
+        /* Mock Object 생성과 리턴값 설정(this.users), DI */
+        UserDao mockUserDao = mock( UserDao.class );
+        when( mockUserDao.getAll() ).thenReturn( this.users );
+        userServiceImpl.setUserDao( mockUserDao );
+
+        /* 리턴값이 없는 MailSender Mock Object 생성 */
+        MailSender mockMailSender = mock( MailSender.class );
+        userServiceImpl.setMailSender( mockMailSender );
+
+        // when ---------------------------->
+        userServiceImpl.upgradeLevels();
+
+        // then ---------------------------->
+        verify( mockUserDao, times( 2 ) ).update( any( User.class ) ); // update()가 두 번 호출됐는지 확인
+        verify( mockUserDao ).update( users.get( 1 ) ); // users.get( 1 )이 한 번 호출됐는지 확인
+        assertThat( users.get( 1 ).getLevel(), is( Level.SILVER ) );
+        verify( mockUserDao ).update( users.get( 3 ) ); // users.get( 3 )이 한 번 호출됐는지 확인
+        assertThat( users.get( 3 ).getLevel(), is( Level.GOLD ) );
+
+        ArgumentCaptor< SimpleMailMessage > mailMessageArg = ArgumentCaptor.forClass( SimpleMailMessage.class );
+        verify( mockMailSender, times( 2 ) ).send( mailMessageArg.capture() );
+        List< SimpleMailMessage > mailMessages = mailMessageArg.getAllValues();
+        assertThat( mailMessages.get( 0 ).getTo()[0], is( users.get( 1 ).getEmail() ) );
+        assertThat( mailMessages.get( 1 ).getTo()[0], is( users.get( 3 ).getEmail() ) );
+
+    }
+
+    @Test
     @DirtiesContext // 컨텍스트의 DI 설정을 변경하는 테스트라는 것을 알려줌
     public void upgradeLevels() throws Exception {
-        userDao.deleteAll();
+        // 고립된 테스트에서는 테스트 대상 오브젝트를 직접 생성하면 됨
+        UserServiceImpl userServiceImpl = new UserServiceImpl();
+        userServiceImpl.setUserLevelUpgradePolicy( new UserLevelUpgradePolicyImpl() );
 
-        for ( User user : users ) {
-            userDao.add( user );
-        }
+        // 목 오브젝트로 만든 UserDao를 직접 DI
+        MockUserDao mockUserDao = new MockUserDao( this.users );
+        userServiceImpl.setUserDao( mockUserDao );
 
-        // 메일 발송 여부 확인을 위해 테스트용 MockMailSender를 DI로 받아서 사용
         MockMailSender mockMailSender = new MockMailSender();
         userServiceImpl.setMailSender( mockMailSender );
 
-        userService.upgradeLevels();
+        userServiceImpl.upgradeLevels();
 
-        checkLevelUpgraded( users.get( 0 ), false );
-        checkLevelUpgraded( users.get( 1 ), true );
-        checkLevelUpgraded( users.get( 2 ), false );
-        checkLevelUpgraded( users.get( 3 ), true );
-        checkLevelUpgraded( users.get( 4 ), false );
+        // MockUserDao로부터 업데이트 결과 가져옴
+        List< User > updated = mockUserDao.getUpdated();
+        // 업데이트 횟수와 정보 확인
+        assertThat( updated.size(), is( 2 ) );
+        checkUserAndLevel( updated.get( 0 ), "leegw700", Level.SILVER );
+        checkUserAndLevel( updated.get( 1 ), "leemj", Level.GOLD );
 
+        /* [Mock] 목 오브젝트를 이용한 결과 확인 */
         List< String > requests = mockMailSender.getRequests();
         MatcherAssert.assertThat( requests.size(), is( 2 ) );
         assertThat( requests.get( 0 ), is( users.get( 1 ).getEmail() ) );
         assertThat( requests.get( 1 ), is( users.get( 3 ).getEmail() ) );
 
+    }
+
+    /**
+     * id와 level을 확인하는 간단한 헬퍼 메소드
+     * @param user
+     * @param expectedId
+     * @param level
+     */
+    private void checkUserAndLevel( User updated, String expectedId, Level expectedLevel ) {
+        assertThat( updated.getId(), is( expectedId ) );
+        assertThat( updated.getLevel(), is( expectedLevel ) );
     }
 
     private void checkLevelUpgraded( User user, boolean upgraded ) {
@@ -148,6 +198,66 @@ class UserServiceTest {
         User userUpdate = userDao.get( user.getId() );
         assertEquals( expectedLevel, userUpdate.getLevel() );
     }
+
+    /**
+     * UserServiceImpl의 upgradeLevels() 메소드에서 사용하는 userDao의 기능은 getAll()과 update()이다.
+     * - getAll()은 레벨 업그레이드 후보 목록만 제공하면 된다. 스텁으로 동작하면 됨
+     * - update()는 업그레이드로 레벨이 '변경'됨을 확인해야 하므로 Mock Object로서 동작해야 함
+     */
+    static class MockUserDao implements UserDao {
+        private List<User> users; // 레벨 업그레이드 후보 User 오브젝트 목록. getAll()의 리턴
+        private List<User> updated = new ArrayList<>(); // 업그레이드 대상 오브젝트를 저장해둘 목록
+
+        private MockUserDao( List<User> users ){
+            this.users = users;
+        }
+
+        public List<User> getUpdated(){
+            return this.updated;
+        }
+
+        /**
+         * 스텁 기능 제공
+         * @return
+         */
+        @Override
+        public List< User > getAll() {
+            return this.users;
+        }
+
+        /**
+         * 목 오브젝트 기능 제공
+         * @param user1
+         */
+        @Override
+        public void update( User user ) {
+            updated.add( user );
+        }
+
+        // ----------------> 테스트에 사용되지 않는 메소드
+        @Override
+        public void add( User user ) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public User get( String id ) {
+            throw new UnsupportedOperationException();
+        }
+
+
+        @Override
+        public void deleteAll() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public int getCount() {
+            throw new UnsupportedOperationException();
+        }
+
+    }
+
 
     /**
      * 메일 전송 확인용 클래스
