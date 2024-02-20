@@ -2,10 +2,12 @@
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <!-- 데코레이터 (프록시) -->
     <bean id="userService" class="org.springbook.user.service.UserServiceTx">
         <property name="transactionManager" ref="transactionManager"/>
         <property name="userService" ref="userServiceImpl"/>
     </bean>
+    <!-- 타깃 -->
     <bean id="userServiceImpl" class="org.springbook.user.service.UserServiceImpl">
         <property name="userDao" ref="userDao"/>
         <property name="mailSender" ref="mailSender"/>
