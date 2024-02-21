@@ -17,6 +17,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -65,10 +66,13 @@ class UserServiceTest {
         testUserService.setMailSender( this.mailSender );
         testUserService.setUserLevelUpgradePolicy( this.userLevelUpgradePolicy );
 
-        // 트랜잭션 기능을 분리한 UserServiceTx를 생성하고 설정정보와 의존 오브젝트 주입
-        UserServiceTx userServiceTx = new UserServiceTx();
-        userServiceTx.setTransactionManager( this.transactionManager );
-        userServiceTx.setUserService( testUserService );
+        TransactionHandler txHandler = new TransactionHandler();
+        // DI
+        txHandler.setTarget( testUserService );
+        txHandler.setTransactionManager( transactionManager );
+        txHandler.setPattern( "upgradeLevels" );
+        // UserService 타입의 다이내믹 프록시 생성
+        UserService txUserService = ( UserService ) Proxy.newProxyInstance( getClass().getClassLoader(), new Class[]{ UserService.class }, txHandler );
 
         userDao.deleteAll();
         for ( User user : users ) {
@@ -76,7 +80,7 @@ class UserServiceTest {
         }
 
         try {
-            userServiceTx.upgradeLevels(); // 트랜잭션 기능이 있는 UserServiceTx를 통해 testUserService가 호출되어야 함
+            txUserService.upgradeLevels(); // 트랜잭션 기능이 있는 UserServiceTx를 통해 testUserService가 호출되어야 함
             fail("TestUserServiceException expected");
         }
         // TestUserService가 주는 예외는 잡아서 계속 진행함.
