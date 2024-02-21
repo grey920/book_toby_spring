@@ -2,10 +2,14 @@
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
-    <bean id="userService" class="org.springbook.user.service.UserServiceTx">
-        <property name="transactionManager" ref="transactionManager"/>
-        <property name="userService" ref="userServiceImpl"/>
+    <!-- 데코레이터 (프록시) -->
+    <bean id="userService" class="org.springbook.user.service.TxProxyFactoryBean">
+        <property name="target" ref="userServiceImpl"/> <!-- 다른 빈을 가리키니까 ref -->
+        <property name="transactionManager" ref="transactionManager"/> <!-- 다른 빈을 가리키니까 ref -->
+        <property name="pattern" value="upgradeLevels"/>
+        <property name="serviceInterface" value="org.springbook.user.service.UserService"/> <!-- Class 타입은 value로 클래스 또는 인터페이스 이름 설정-->
     </bean>
+    <!-- 타깃 -->
     <bean id="userServiceImpl" class="org.springbook.user.service.UserServiceImpl">
         <property name="userDao" ref="userDao"/>
         <property name="mailSender" ref="mailSender"/>
@@ -27,6 +31,12 @@
         <property name="url" value="jdbc:mysql://localhost:3306/toby_spring?serverTimezone=UTC"/>
         <property name="username" value="root"/>
         <property name="password" value="nea8041"/>
+    </bean>
+
+
+    <!--팩토리 빈 학습-->
+    <bean id="m" class="org.springbook.learningtest.factorybean.MessageFactoryBean">
+        <property name="text" value="Factory Bean"/>
     </bean>
 
 

@@ -10,6 +10,7 @@ import org.springbook.user.domain.Level;
 import org.springbook.user.domain.User;
 import org.springbook.user.service.UserServiceImpl.TestUserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.mail.MailException;
 import org.springframework.mail.MailSender;
 import org.springframework.mail.SimpleMailMessage;
@@ -17,6 +18,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -37,6 +39,7 @@ class UserServiceTest {
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired UserLevelUpgradePolicy userLevelUpgradePolicy;
     @Autowired MailSender mailSender;
+    @Autowired ApplicationContext context; // 팩토리 빈을 가져오려면 애플리케이션 컨텍스트가 필요함
 
     // 테스트 픽스처
     List< User > users;
@@ -56,7 +59,8 @@ class UserServiceTest {
      * 트랜잭션 테스트
      */
     @Test
-    public void upgradeAllOrNothing(){
+    @DirtiesContext // 컨텍스트 무효화 애노테이션. 이 테스트에서는 DI 설정을 변경하는 테스트라는 것을 알려줌 ( TxProxyFactoryBean이 userServiceImpl을 사용하기 때문에 TestUserService를 사용하기 위해 설정 )
+    public void upgradeAllOrNothing() throws Exception {
 
         // TestUserService는 이 테스트에서만 쓸 것이기 때문에 굳이 빈으로 등록하지 않는다.
         TestUserService testUserService = new TestUserService( users.get( 3 ).getId() );
@@ -65,10 +69,9 @@ class UserServiceTest {
         testUserService.setMailSender( this.mailSender );
         testUserService.setUserLevelUpgradePolicy( this.userLevelUpgradePolicy );
 
-        // 트랜잭션 기능을 분리한 UserServiceTx를 생성하고 설정정보와 의존 오브젝트 주입
-        UserServiceTx userServiceTx = new UserServiceTx();
-        userServiceTx.setTransactionManager( this.transactionManager );
-        userServiceTx.setUserService( testUserService );
+        TxProxyFactoryBean txProxyFactoryBean = context.getBean( "&userService", TxProxyFactoryBean.class ); // 이름에 &를 붙여 팩토리 빈 자체를 가져옴
+        txProxyFactoryBean.setTarget( testUserService ); // 타깃을 TestUserService로 변경
+        UserService txUserService = ( UserService ) txProxyFactoryBean.getObject(); // 변경된 타깃 설정을 이용한 팩토리 빈을 통해 생성된 프록시를 가져옴
 
         userDao.deleteAll();
         for ( User user : users ) {
@@ -76,7 +79,7 @@ class UserServiceTest {
         }
 
         try {
-            userServiceTx.upgradeLevels(); // 트랜잭션 기능이 있는 UserServiceTx를 통해 testUserService가 호출되어야 함
+            txUserService.upgradeLevels(); // 트랜잭션 기능이 있는 UserServiceTx를 통해 testUserService가 호출되어야 함
             fail("TestUserServiceException expected");
         }
         // TestUserService가 주는 예외는 잡아서 계속 진행함.
