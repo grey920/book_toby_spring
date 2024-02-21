@@ -2,9 +2,12 @@
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
-    <bean id="userService" class="org.springbook.user.service.UserServiceTx">
-        <property name="transactionManager" ref="transactionManager"/>
-        <property name="userService" ref="userServiceImpl"/>
+    <!-- 데코레이터 (프록시) -->
+    <bean id="userService" class="org.springbook.user.service.TxProxyFactoryBean">
+        <property name="target" ref="userServiceImpl"/> <!-- 다른 빈을 가리키니까 ref -->
+        <property name="transactionManager" ref="transactionManager"/> <!-- 다른 빈을 가리키니까 ref -->
+        <property name="pattern" value="upgradeLevels"/>
+        <property name="serviceInterface" value="org.springbook.user.service.UserService"/> <!-- Class 타입은 value로 클래스 또는 인터페이스 이름 설정-->
     </bean>
     <bean id="userServiceImpl" class="org.springbook.user.service.UserServiceImpl">
         <property name="userDao" ref="userDao"/>
