@@ -32,5 +32,11 @@
     </bean>
 
 
+    <!--팩토리 빈 학습-->
+    <bean id="m" class="org.springbook.learningtest.factorybean.MessageFactoryBean">
+        <property name="text" value="Factory Bean"/>
+    </bean>
+
+
 
 </beans>
