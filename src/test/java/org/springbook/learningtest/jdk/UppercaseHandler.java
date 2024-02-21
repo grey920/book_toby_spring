@@ -17,10 +17,10 @@ public class UppercaseHandler implements InvocationHandler {
     @Override
     public Object invoke( Object proxy, Method method, Object[] args ) throws Throwable {
         Object ret = method.invoke( target, args );
-        // 호출한 메소드의 리턴 타입이 String인 경우에만 대문자 변경 기능 적용
-        if ( ret instanceof String ) {
+        if ( ret instanceof String && method.getName().startsWith( "say" ) ) {
             return ( ( String ) ret ).toUpperCase();
         }
+        // 조건이 일치하지 않으면 타깃 오브젝트 결과를 그대로 리턴
         else {
             return ret;
         }
